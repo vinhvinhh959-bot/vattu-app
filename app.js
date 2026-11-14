@@ -3,7 +3,7 @@ const norm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d
 const money=n=>Math.round(n||0).toLocaleString('vi-VN');
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let S;try{S=JSON.parse(localStorage.getItem(LS))}catch(e){}
-S=Object.assign({custom:[],ov:{},docs:[],seq:{}},S||{});
+S=Object.assign({custom:[],ov:{},docs:[],seq:{},qr:'',qrNote:'',shop:''},S||{});
 const save=()=>localStorage.setItem(LS,JSON.stringify(S));
 CATALOG.forEach(x=>x.k=norm(x.n));
 const all=()=>CATALOG.concat(S.custom).map(x=>{x.k=x.k||norm(x.n);return S.ov[x.id]?{...x,...S.ov[x.id]}:x});
@@ -26,12 +26,12 @@ function chips(cb){const gs=[...new Set(all().map(x=>x.g))];
   return `<div class="chips"><button class="${grp?'':'on'}" data-g="" onclick="grp=this.dataset.g;${cb}">Tất cả</button>${gs.map(g=>`<button class="${grp==g?'on':''}" data-g="${esc(g)}" onclick="grp=this.dataset.g;${cb}">${esc(g)}</button>`).join('')}</div>`}
 /* ---- Danh mục ---- */
 function vCat(){
-  $('#act').innerHTML=`<button class="b g" onclick="addProd()">+ Hàng mới</button><button class="b g" onclick="backup()">Sao lưu</button><button class="b g" onclick="$('#rf').click()">Khôi phục</button><input id="rf" type="file" accept=".json" hidden onchange="restore(this.files[0])">`;
+  $('#act').innerHTML=`<button class="b g" onclick="addProd()">+ Hàng mới</button><button class="b g" onclick="openSet()">Cài đặt</button>`;
   $('#v').innerHTML=`<input id="s" placeholder="Tìm: co 90, van 42, tê giảm 60…" value="${esc(q)}" oninput="q=this.value;vCatList()">${chips('render()')}<div id="l"></div>`;vCatList()}
 function vCatList(){const st=stock(),r=filt();
   $('#l').innerHTML=r.slice(0,100).map(x=>`<div class="card" onclick="editP('${x.id}')"><div>${esc(x.n)}</div><div class="row mut"><span>Nhập ${money(x.c)} · Bán <b>${money(x.p)}</b></span><span>Tồn ${left(st[x.id])}</span></div></div>`).join('')+(r.length>100?`<p class="mut">Còn ${r.length-100} mục, gõ thêm để lọc.</p>`:'')||'<p class="mut">Không tìm thấy hàng. Thử gõ ngắn hơn hoặc bấm “+ Hàng mới”.</p>'}
-function editP(id){const x=byId()[id],c=prompt('Giá nhập của '+x.n,x.c);if(c===null)return;const p=prompt('Giá bán',x.p);if(p===null)return;
-  S.ov[id]={c:+c||0,p:+p||0};save();vCatList()}
+function editP(id){const x=byId()[id],n=prompt('Tên hàng',x.n);if(n===null||!n.trim())return;const g=prompt('Nhóm hàng',x.g);if(g===null)return;const c=prompt('Giá nhập',x.c);if(c===null)return;const p=prompt('Giá bán',x.p);if(p===null)return;
+  S.ov[id]={n:n.trim(),k:norm(n),g:g.trim()||x.g,c:+c||0,p:+p||0};save();render()}
 function addProd(){const n=prompt('Tên hàng mới');if(!n)return;const g=prompt('Nhóm hàng','Khác')||'Khác',c=+prompt('Giá nhập',0)||0,p=+prompt('Giá bán',0)||0;
   S.custom.push({id:'c'+Date.now(),n:n.trim(),c,p,g});save();render()}
 const dl=(n,t,m)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:m}));a.download=n;a.click()};
@@ -45,8 +45,9 @@ function vDocs(){const T=TYPE[tab];
 function edit(type,id){D=id?JSON.parse(JSON.stringify(S.docs.find(d=>d.id==id))):{id:'d'+Date.now(),type,no:'',date:new Date().toISOString().slice(0,10),party:'',note:'',lines:[],isNew:true};drawEd()}
 function drawEd(){const m=$('#modal'),y=m.scrollTop,st=stock(D.id),T=TYPE[D.type];m.hidden=false;
   m.innerHTML=`<div class="row" style="padding:10px 0"><h1>${T.t}${D.no?' · '+D.no:''}</h1><button class="b g noprt" onclick="closeEd()">Đóng</button></div>
-  <div class="card"><input placeholder="${D.type=='buy'?'Nhà cung cấp':'Khách hàng'}" value="${esc(D.party)}" oninput="D.party=this.value"><div style="height:6px"></div><input type="date" value="${D.date}" onchange="D.date=this.value"><div style="height:6px"></div><input placeholder="Ghi chú" value="${esc(D.note)}" oninput="D.note=this.value"></div>
+  ${S.shop?`<div class="mut" style="margin-bottom:6px">${esc(S.shop)}</div>`:''}<div class="card"><input placeholder="${D.type=='buy'?'Nhà cung cấp':'Khách hàng'}" value="${esc(D.party)}" oninput="D.party=this.value"><div style="height:6px"></div><input type="date" value="${D.date}" onchange="D.date=this.value"><div style="height:6px"></div><input placeholder="Ghi chú" value="${esc(D.note)}" oninput="D.note=this.value"></div>
   ${D.lines.map((l,i)=>`<div class="card"><div class="row"><span>${esc(l.n)}</span><button class="r noprt" onclick="D.lines.splice(${i},1);drawEd()">✕</button></div><div class="row" style="margin-top:6px"><input class="q" type="number" inputmode="decimal" min="0" value="${l.q}" onchange="D.lines[${i}].q=+this.value||0;drawEd()"><span class="mut">×</span><input class="pr" type="number" inputmode="numeric" value="${l.p}" onchange="D.lines[${i}].p=+this.value||0;drawEd()"><b>${money(l.q*l.p)}</b></div>${D.type=='sale'&&l.q>left(st[l.id])?`<div class="neg mut">Kho chỉ còn ${left(st[l.id])}</div>`:''}</div>`).join('')}
+  ${D.type=='buy'?'':S.qr?`<div class="card" style="text-align:center"><img src="${S.qr}" alt="Mã QR thanh toán" style="max-width:220px;width:100%;background:#fff;border-radius:8px"><div class="mut">${esc(S.qrNote||'')}</div><button class="b g noprt" onclick="showQR()">Phóng to cho khách quét</button></div>`:`<p class="mut noprt">Chưa có mã QR thanh toán. Vào Danh mục → Cài đặt để tải ảnh QR lên.</p>`}
   <button class="b g noprt" style="width:100%" onclick="pick()">+ Thêm hàng từ danh mục</button>
   <div class="foot"><div><div class="mut">Tổng cộng</div><b style="font-size:18px">${money(tot(D))} đ</b></div><div class="noprt row">${D.isNew?'':`<button class="r" onclick="delDoc()">Xóa</button>`}${D.type=='quote'&&!D.isNew?`<button class="b g" onclick="toSale()">Lập hóa đơn</button>`:''}<button class="b g" onclick="print()">In</button><button class="b" onclick="saveDoc()">Lưu</button></div></div>`;m.scrollTop=y}
 function pick(){q='';grp='';const m=document.createElement('div');m.id='pk';m.className='ov';m.style.zIndex=30;document.body.append(m);pkDraw()}
@@ -60,6 +61,14 @@ function saveDoc(){if(!D.lines.length)return alert('Chưa có mặt hàng nào. 
 function closeEd(){$('#modal').hidden=true;D=null;render()}
 function delDoc(){if(confirm('Xóa phiếu này?')){S.docs=S.docs.filter(d=>d.id!=D.id);save();closeEd()}}
 function toSale(){D=Object.assign(JSON.parse(JSON.stringify(D)),{id:'d'+Date.now(),type:'sale',no:'',isNew:true});tab='sale';drawEd()}
+/* ---- Cài đặt & QR ---- */
+function openSet(){let m=$('#st');if(!m){m=document.createElement('div');m.id='st';m.className='ov';m.style.zIndex=35;document.body.append(m)}
+  m.innerHTML=`<div class="row" style="padding:10px 0"><h1>Cài đặt</h1><button class="b" onclick="$('#st').remove();render()">Xong</button></div>
+  <div class="card"><b>Tên cửa hàng (in trên phiếu)</b><div style="height:6px"></div><input value="${esc(S.shop||'')}" oninput="S.shop=this.value;save()"></div>
+  <div class="card"><b>Mã QR thanh toán</b>${S.qr?`<div style="text-align:center;margin:8px 0"><img src="${S.qr}" alt="Mã QR" style="max-width:240px;width:100%;background:#fff;border-radius:8px"></div>`:'<p class="mut">Chưa có ảnh QR. Chọn ảnh QR ngân hàng từ thư viện ảnh.</p>'}<input type="file" accept="image/*" id="qf" hidden onchange="setQR(this.files[0])"><div class="row"><button class="b g" onclick="$('#qf').click()">${S.qr?'Đổi ảnh QR':'Tải ảnh QR lên'}</button>${S.qr?`<button class="r" onclick="S.qr='';save();openSet()">Xóa QR</button>`:''}</div><div style="height:8px"></div><input placeholder="Ghi chú: chủ tài khoản, ngân hàng, số TK" value="${esc(S.qrNote||'')}" oninput="S.qrNote=this.value;save()"></div>
+  <div class="card"><b>Dữ liệu</b><div class="row" style="margin-top:8px"><button class="b g" onclick="backup()">Sao lưu</button><button class="b g" onclick="$('#rf').click()">Khôi phục</button></div><input id="rf" type="file" accept=".json" hidden onchange="restore(this.files[0])"></div>`}
+function setQR(f){if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,700/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*k;c.height=im.height*k;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);S.qr=c.toDataURL('image/jpeg',.92);save();openSet()};im.onerror=()=>alert('Không đọc được ảnh này.');im.src=r.result};r.readAsDataURL(f)}
+function showQR(){const m=document.createElement('div');m.className='ov';m.style.cssText='z-index:40;text-align:center';m.innerHTML=`<img src="${S.qr}" alt="Mã QR" style="width:100%;max-width:420px;background:#fff;border-radius:12px;margin-top:20px"><h1 style="margin:12px 0">${money(tot(D))} đ</h1><div class="mut">${esc(S.qrNote||'')}</div><button class="b" style="margin-top:16px" onclick="this.parentNode.remove()">Đóng</button>`;document.body.append(m)}
 /* ---- Tồn kho ---- */
 function vStock(){$('#act').innerHTML=`<button class="b g" onclick="csv()">Xuất CSV</button>`;
   $('#v').innerHTML=`<input placeholder="Tìm hàng…" value="${esc(q)}" oninput="q=this.value;vStockList()">${chips('render()')}<label class="mut" style="display:block;margin:4px 0 8px"><input type="checkbox" id="sh" style="width:auto" onchange="vStockList()"> Hiện cả hàng chưa có giao dịch</label><div id="l"></div>`;vStockList()}
